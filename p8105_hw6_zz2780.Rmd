@@ -6,9 +6,26 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+	fig.width = 8, 
+  fig.height = 6,
+  out.width = "90%"
+)
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
 ```
 
 # Problem 2
@@ -30,4 +47,71 @@ data2<-data2%>%
    victim_race %in% c("White", "Black")
   )
 ```
+
+After subset the dataset to only for city of Baltimore, I ran a glm on the dataset with solved/unsolved homocide as outcome, and victim's age, sex, and race as predictors.
+```{r}
+data2_baltimore=data2%>%
+  filter(
+    city_state=="Baltimore, MD"
+  )
+
+fit=glm(solved ~ victim_age + victim_sex + victim_race, data=data2_baltimore)
+```
+
+The code below tidy the glm output, and obtains the odds ratio and its 95% confidence interval for solving homicides comparing male victims to female victims keeping all other variables fixed.
+```{r}
+fit%>%
+  broom::tidy()%>%
+  select(term, estimate, std.error)%>%
+  filter(term=="victim_sexMale")%>%
+  mutate(
+    odds_ratio=exp(estimate),
+    lower_ci=exp(estimate-1.96*std.error),
+    upper_ci=exp(estimate+1.96*std.error)
+  )%>%
+  select(-estimate, -std.error)
+```
+The code below runs glm for every city in the data set and saves the glm output in results, which is then unnested.
+```{r}
+nest_data2<-data2%>%
+  nest(data=-city_state)%>%
+  mutate(
+    models=purrr::map(data,~glm(solved ~ victim_age + victim_sex + victim_race, data=.x)),
+    results=purrr::map(models, broom::tidy)
+  )%>%
+  select(-data, -models)%>%
+  unnest(results)
+```
+
+The code below creates a dataframe odds_ratio_sex that stores the estimate and confidence interval of the adjusted odds ratio for solving homicides comparing male victims to female victims for every city, keeping all other variables fixed
+```{r}
+odds_ratio_sex<-nest_data2%>%
+  select(city_state, term, estimate, std.error)%>%
+  filter(term=="victim_sexMale")%>%
+  mutate(
+    odds_ratio=exp(estimate),
+    lower_ci=exp(estimate-1.96*std.error),
+    upper_ci=exp(estimate+1.96*std.error)
+  )%>%
+  select(-term, -estimate, -std.error)
+
+odds_ratio_sex
+```
+The barplot plot_or shows the estimated ORs and CIs for solving homicides comparing male and female victims while keeping other variables constant, in descending order of OR. The ORs are represented by the bars and CIs are represented by the error bars. 
+
+We can observe that Stockton, CA has OR closest to 1, indicating that solving homicides in Stockton, CA does not associate with victim's gender. Only Fresno, CA, Minneapolis, MN, and Stockton, CA have OR greater than 1, meaning that all other cities would be more likely to solve the homicide if the victim is female, with New York City has the lowest OR. 
+```{r}
+plot_or<- ggplot(odds_ratio_sex, aes(x =reorder(city_state, desc(odds_ratio)), y = odds_ratio)) +
+  geom_bar(stat="identity")+
+  geom_errorbar(width=.1, aes(ymin=lower_ci,ymax=upper_ci),position=position_dodge(width=0.5))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  labs(x="City, State", y = "Odds Ratio",title="Estimated Odds Ratio and CI for Solving Homicides Comparing Male victims to Female victims in Each City")
+
+plot_or
+```
+
+
+
+
+
 
