@@ -1,0 +1,33 @@
+---
+title: "p8105_hw6_zz2780"
+author: "Lydia Zhang"
+date: "2022-12-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+```
+
+# Problem 2
+
+Load the data from Github Repo
+```{r}
+data2<-read.csv("https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv")
+```
+
+The code below creates a city_state variable and a binary variable solved indicating whether the homicide is solved, omits cities with missing race or mistake, limits the victim's race to only white or black, and changes victim_age to numeric variable. 
+```{r}
+data2<-data2%>%
+  mutate(
+    city_state=paste(city, state, sep=", "),
+    solved=if_else(str_starts(disposition, "Closed"),1,0),
+    victim_age=as.numeric(victim_age))%>%
+  filter(
+   !city_state %in% c("Dallas, TX", "Phoenix, AZ", "Kansas City, MO", "Tulsa, AL"),
+   victim_race %in% c("White", "Black")
+  )
+```
+
