@@ -2,7 +2,7 @@
 title: "p8105_hw6_zz2780"
 author: "Lydia Zhang"
 date: "2022-12-01"
-output: html_document
+output: github_document
 ---
 
 ```{r setup, include=FALSE}
@@ -111,6 +111,36 @@ plot_or
 ```
 
 
+Question 3
+
+The code below loads the data, clean the variable names, and covert numeric variables to factor where appropriate.
+```{r}
+data3<-read_csv("birthweight.csv")%>%
+  janitor::clean_names()%>%
+  mutate(
+    babysex<-as.factor(babysex),
+    frace<-as.factor(frace),
+    malform<-as.factor(malform),
+    mrace<-as.factor(mrace)
+  )
+```
+I used complete.cases to check if data 3 has any row that have missing values. It returns none, meaning the data has no missing value.
+```{r}
+data3[!complete.cases(data3),]
+```
+
+I hypothesize that the mom's pre-pregnancy BMI is positively associated with baby's birthweight, and I think the presence of malformation can be an effect modifier (EMM) in the regression model (model1). I fitted a linear regression model with mother's BMI, presencence of malformations, and their interaction term as predictors and baby's birthweight as outcome.
+```{r}
+model1<-lm(bwt~ppbmi*malform, data=data3)
+```
+
+I added residuals and fitted values of the model and created a violin plot of model residuals against fitted value. 
+```{r}
+data3 %>% 
+  modelr::add_residuals(model1) %>% 
+  modelr::add_predictions(model1)%>%
+  ggplot(aes(x = resid, y = pred)) + geom_violin()
+```
 
 
 
