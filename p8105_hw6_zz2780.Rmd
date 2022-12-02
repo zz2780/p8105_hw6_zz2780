@@ -8,6 +8,8 @@ output: github_document
 ```{r setup, include=FALSE}
 
 library(tidyverse)
+library(modelr)
+library(mgcv)
 
 knitr::opts_chunk$set(
 	echo = TRUE,
@@ -27,6 +29,8 @@ scale_fill_discrete = scale_fill_viridis_d
 
 theme_set(theme_minimal() + theme(legend.position = "bottom"))
 ```
+
+
 
 # Problem 2
 
@@ -129,9 +133,16 @@ I used complete.cases to check if data 3 has any row that have missing values. I
 data3[!complete.cases(data3),]
 ```
 
-I hypothesize that the mom's pre-pregnancy BMI is positively associated with baby's birthweight, and I think the presence of malformation can be an effect modifier (EMM) in the regression model (model1). I fitted a linear regression model with mother's BMI, presencence of malformations, and their interaction term as predictors and baby's birthweight as outcome.
+I hypothesize that the baby's head circumference is positively associated with baby's birthweight, so I plotted a graph using baby's head circumference against birthweight. I can observe a positive linear trend, and I also hypothesize that family income and its interaction with head circumference are associated with birthweight.
 ```{r}
-model1<-lm(bwt~ppbmi*malform, data=data3)
+data3%>%
+  ggplot(aes(x=bhead, y=bwt, color=mrace))+
+  geom_point()
+```
+
+I fitted a linear regression model with baby's head circumference, family income, and their interaction term as predictors and baby's birthweight as outcome.
+```{r}
+model1<-lm(bwt~bhead*fincome, data=data3)
 ```
 
 I added residuals and fitted values of the model and created a violin plot of model residuals against fitted value. 
@@ -141,6 +152,48 @@ data3 %>%
   modelr::add_predictions(model1)%>%
   ggplot(aes(x = resid, y = pred)) + geom_violin()
 ```
+Model using length at birth and gestational age as predictors (main effects only)
+```{r}
+model2<-lm(bwt~blength+gaweeks,data=data3)
+```
+
+Model using head circumference, length, sex, and all interactions (including the three-way interaction)
+```{r}
+model3<-lm(bwt~bhead*blength*babysex, data=data3)
+
+rmse(model3,data=data3)
+```
+
+CV using crossv_mc comparing 3 models
+```{r}
+cv_df =
+  crossv_mc(data3, 100)%>%
+  mutate(
+    model1=purrr::map(train,~lm(bwt~bhead*fincome, data=.x)),
+    model2=purrr::map(train,~lm(bwt~blength+gaweeks,data=.x)),
+    model3=purrr::map(train,~lm(bwt~bhead*blength*babysex,data=.x))
+  )%>%
+  mutate(
+    rmse1=purrr::map2_dbl(model1, test, ~rmse(model=.x, data=.y)),
+    rmse2=purrr::map2_dbl(model2, test, ~rmse(model=.x, data=.y)),
+    rmse3=purrr::map2_dbl(model3, test, ~rmse(model=.x, data=.y))
+  )
+```
+
+Prediction error distribution plot for each model
+```{r}
+cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + geom_violin()
+```
+The RMSE of each model shows that model 3 is better than the other two models. 
+
 
 
 
