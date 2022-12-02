@@ -30,6 +30,53 @@ scale_fill_discrete = scale_fill_viridis_d
 theme_set(theme_minimal() + theme(legend.position = "bottom"))
 ```
 
+# Problem 1
+
+Load data
+```{r}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+```
+
+Distribution of $\hat{r}^2$ 
+```{r}
+weather_df %>% 
+  modelr::bootstrap(n = 5000) %>% 
+  mutate(
+    models = map(strap, ~lm(tmax ~ tmin, data = .x) ),
+    results = map(models, broom::glance)) %>% 
+  select(-strap, -models) %>% 
+  unnest(results) %>% 
+  ggplot(aes(x = r.squared)) + geom_density()
+```
+
+Distribution of $\log(\beta_0 * \beta1)$
+```{r}
+weather_df %>% 
+  modelr::bootstrap(n = 5000) %>% 
+  mutate(
+    models = map(strap, ~lm(tmax ~ tmin, data = .x) ),
+    results = map(models, broom::tidy)) %>% 
+  select(-strap, -models) %>% 
+  unnest(results) %>% 
+  select(id = `.id`, term, estimate) %>% 
+  pivot_wider(
+    names_from = term, 
+    values_from = estimate) %>% 
+  rename(beta0 = `(Intercept)`, beta1 = tmin) %>% 
+  mutate(log_b0b1 = log(beta0 * beta1)) %>% 
+  ggplot(aes(x = log_b0b1)) + geom_density()
+```
+
 
 
 # Problem 2
@@ -115,7 +162,7 @@ plot_or
 ```
 
 
-Question 3
+# Probelm 3
 
 The code below loads the data, clean the variable names, and covert numeric variables to factor where appropriate.
 ```{r}
@@ -133,16 +180,16 @@ I used complete.cases to check if data 3 has any row that have missing values. I
 data3[!complete.cases(data3),]
 ```
 
-I hypothesize that the baby's head circumference is positively associated with baby's birthweight, so I plotted a graph using baby's head circumference against birthweight. I can observe a positive linear trend, and I also hypothesize that family income and its interaction with head circumference are associated with birthweight.
+I hypothesize that the baby's head circumference is positively associated with baby's birthweight, so I plotted a graph using baby's head circumference against birthweight. I can observe a positive linear trend, and I also hypothesize that mother's race and its interaction with head circumference are associated with birthweight.
 ```{r}
 data3%>%
   ggplot(aes(x=bhead, y=bwt, color=mrace))+
   geom_point()
 ```
 
-I fitted a linear regression model with baby's head circumference, family income, and their interaction term as predictors and baby's birthweight as outcome.
+I fitted a linear regression model with baby's head circumference, maternal race, and their interaction term as predictors and baby's birthweight as outcome.
 ```{r}
-model1<-lm(bwt~bhead*fincome, data=data3)
+model1<-lm(bwt~bhead*mrace, data=data3)
 ```
 
 I added residuals and fitted values of the model and created a violin plot of model residuals against fitted value. 
@@ -152,24 +199,13 @@ data3 %>%
   modelr::add_predictions(model1)%>%
   ggplot(aes(x = resid, y = pred)) + geom_violin()
 ```
-Model using length at birth and gestational age as predictors (main effects only)
-```{r}
-model2<-lm(bwt~blength+gaweeks,data=data3)
-```
-
-Model using head circumference, length, sex, and all interactions (including the three-way interaction)
-```{r}
-model3<-lm(bwt~bhead*blength*babysex, data=data3)
-
-rmse(model3,data=data3)
-```
 
 CV using crossv_mc comparing 3 models
 ```{r}
 cv_df =
   crossv_mc(data3, 100)%>%
   mutate(
-    model1=purrr::map(train,~lm(bwt~bhead*fincome, data=.x)),
+    model1=purrr::map(train,~lm(bwt~bhead*mrace, data=.x)),
     model2=purrr::map(train,~lm(bwt~blength+gaweeks,data=.x)),
     model3=purrr::map(train,~lm(bwt~bhead*blength*babysex,data=.x))
   )%>%
@@ -192,7 +228,8 @@ cv_df %>%
   mutate(model = fct_inorder(model)) %>% 
   ggplot(aes(x = model, y = rmse)) + geom_violin()
 ```
-The RMSE of each model shows that model 3 is better than the other two models. 
+
+The RMSE of each model indicates that model 3 is better than the other two models. 
 
 
 
